@@ -3,6 +3,7 @@
 using Neural.UI;
 using SDL2;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 
@@ -33,7 +34,7 @@ namespace Neural
                 if (magic != 0x00000803) throw new Exception("Wrong magic number");
 
                 var imageCount = reader.ReadInt();
-                Console.WriteLine($"Found {imageCount} images.");
+                Trace.WriteLine($"Found {imageCount} images.");
 
                 imageHeight = reader.ReadInt();
                 imageWidth = reader.ReadInt();
@@ -51,29 +52,53 @@ namespace Neural
                 if (magic != 0x00000801) throw new Exception("Wrong magic number");
 
                 var itemCount = reader.ReadInt();
-                Console.WriteLine($"Found {itemCount} labels.");
+                Trace.WriteLine($"Found {itemCount} labels.");
 
                 labels = new byte[itemCount];
                 for (var i = 0; i < itemCount; i++) labels[i] = reader.ReadByte();
             }
 
             {
+                var net = new NeuralNet(new int[] { imageWidth * imageHeight, 600, 400, 200, 100, 10 });
+                var netInput = new float[imageWidth * imageHeight];
+                var netResult = -1;
+
+                void RunNetworkOnImage()
+                {
+                    var output = net.Run(netInput);
+                    Debug.Assert(output.Length == 10);
+
+                    var max = 0f;
+                    for (var i = 0; i < output.Length; i++)
+                    {
+                        if (output[i] > max)
+                        {
+                            max = output[i];
+                            netResult = i;
+                        }
+                    }
+                }
+
                 var windowWidth = 1280;
                 var windowHeight = 720;
                 var imageScale = 8;
 
                 var imageIndex = 0;
+                var labelText = "";
                 var imageText = "";
-
-                var imageTexture = IntPtr.Zero;
-                var imageSourceRect = new SDL.SDL_Rect { x = 0, y = 0, w = imageWidth, h = imageHeight };
-                var imageDestRect = new SDL.SDL_Rect { x = windowWidth / 2 - (imageWidth / 2 * imageScale), y = windowHeight / 2 - (imageHeight / 2 * imageScale), w = imageWidth * imageScale, h = imageHeight * imageScale };
 
                 SDL.SDL_Init(SDL.SDL_INIT_VIDEO);
                 SDL.SDL_CreateWindowAndRenderer(windowWidth, windowHeight, 0, out var window, out var renderer);
                 SDL.SDL_SetWindowTitle(window, "Neural");
 
-                void LoadImage()
+                var font = Font.LoadFromChevyRayFolder(renderer, Path.Combine(dataPath, "Fonts", "ChevyRay - Softsquare Mono"));
+                var fontStyle = new FontStyle(font) { Scale = 2, LetterSpacing = 1 };
+
+                var imageTexture = IntPtr.Zero;
+                var imageSourceRect = new SDL.SDL_Rect { x = 0, y = 0, w = imageWidth, h = imageHeight };
+                var imageDestRect = new SDL.SDL_Rect { x = windowWidth / 2 - (imageWidth / 2 * imageScale), y = windowHeight / 2 - (imageHeight / 2 * imageScale), w = imageWidth * imageScale, h = imageHeight * imageScale };
+
+                void LoadImageForRender()
                 {
                     if (imageTexture != IntPtr.Zero) SDL.SDL_DestroyTexture(imageTexture);
 
@@ -95,13 +120,18 @@ namespace Neural
                         }
                     }
 
-                    imageText = $"Image #{imageIndex}. Label: {labels[imageIndex]}";
+                    labelText = $"Label: {labels[imageIndex]}, Network output: {netResult}";
+                    imageText = $"({imageIndex} / {images.Length})";
                 }
 
-                LoadImage();
+                void OnImageChanged()
+                {
+                    RunNetworkOnImage();
+                    LoadImageForRender();
+                }
 
-                var font = Font.LoadFromChevyRayFolder(renderer, Path.Combine(dataPath, "Fonts", "ChevyRay - Softsquare Mono"));
-                var fontStyle = new FontStyle(font) { Scale = 2, LetterSpacing = 1 };
+                OnImageChanged();
+
 
                 var running = true;
 
@@ -126,8 +156,8 @@ namespace Neural
                                 break;
 
                             case SDL.SDL_EventType.SDL_KEYDOWN:
-                                if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_RIGHT) { if (imageIndex < images.Length - 1) { imageIndex++; LoadImage(); } }
-                                else if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_LEFT) { if (imageIndex > 0) { imageIndex--; LoadImage(); } }
+                                if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_RIGHT) { if (imageIndex < images.Length - 1) { imageIndex++; OnImageChanged(); } }
+                                else if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_LEFT) { if (imageIndex > 0) { imageIndex--; OnImageChanged(); } }
                                 break;
                         }
                     }
@@ -139,7 +169,8 @@ namespace Neural
 
                     SDL.SDL_RenderCopy(renderer, imageTexture, ref imageSourceRect, ref imageDestRect);
 
-                    fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(imageText) / 2, imageDestRect.y + imageDestRect.h + 8, imageText);
+                    fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(labelText) / 2, imageDestRect.y + imageDestRect.h + 8, labelText);
+                    fontStyle.DrawText(windowWidth - fontStyle.MeasureText(imageText) - 8, windowHeight - fontStyle.Size - 8, imageText);
 
                     SDL.SDL_RenderPresent(renderer);
                     Thread.Sleep(1);
