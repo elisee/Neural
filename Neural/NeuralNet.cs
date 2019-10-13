@@ -3,9 +3,9 @@ using System.Diagnostics;
 
 namespace Neural
 {
-    class NeuralNet
+    public class NeuralNet
     {
-        class Layer
+        public class Layer
         {
             public readonly float[] Biases;
             public readonly float[] Weights;
@@ -19,34 +19,50 @@ namespace Neural
             }
         }
 
-        readonly Layer[] _layers;
+        public readonly Layer[] Layers;
 
         public NeuralNet(int[] neuronCountByLayer)
         {
-            _layers = new Layer[neuronCountByLayer.Length - 1];
-            for (var i = 1; i < neuronCountByLayer.Length; i++) _layers[i - 1] = new Layer(neuronCountByLayer[i], neuronCountByLayer[i - 1]);
+            Layers = new Layer[neuronCountByLayer.Length - 1];
+            for (var i = 1; i < neuronCountByLayer.Length; i++) Layers[i - 1] = new Layer(neuronCountByLayer[i], neuronCountByLayer[i - 1]);
 
-            // TODO: Setup random weights & bias
+            // Setup random weights
             var random = new Random();
 
-            foreach (var layer in _layers)
+            // See https://stackoverflow.com/questions/218060/random-gaussian-variables
+            double StandardNormalRandom()
             {
-                for (var i = 0; i < layer.Weights.Length; i++) layer.Weights[i] = (float)random.NextDouble();
+                var u1 = 1.0 - random.NextDouble();
+                var u2 = 1.0 - random.NextDouble();
+                return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+            }
+
+            foreach (var layer in Layers)
+            {
+                for (var i = 0; i < layer.Weights.Length; i++) layer.Weights[i] = (float)StandardNormalRandom();
             }
         }
 
         public float[] Run(float[] inputs)
         {
-            Debug.Assert(inputs.Length == _layers[0].Weights.Length / _layers[0].Values.Length);
+            Debug.Assert(inputs.Length == Layers[0].Weights.Length / Layers[0].Values.Length);
 
+            // Forward propagation
             var previousLayerValues = inputs;
 
-            foreach (var layer in _layers)
+            foreach (var layer in Layers)
             {
                 for (var i = 0; i < layer.Values.Length; i++)
                 {
-                    layer.Values[i] = 0;
-                    for (var j = 0; j < previousLayerValues.Length; j++) layer.Values[i] += previousLayerValues[j] * layer.Weights[i] - layer.Biases[i];
+                    var value = layer.Biases[i];
+
+                    for (var j = 0; j < previousLayerValues.Length; j++) value += previousLayerValues[j] * layer.Weights[i];
+
+                    // Sigmoid
+                    // layer.Values[i] = 1f / (1f + MathF.Exp(-value));
+
+                    // ReLU
+                    layer.Values[i] = value > 0f ? value : 0f;
                 }
 
                 previousLayerValues = layer.Values;

@@ -1,6 +1,7 @@
 ﻿// using ComputeSharp;
 
 using Neural.UI;
+using NeuralBasics.Math;
 using SDL2;
 using System;
 using System.Diagnostics;
@@ -59,15 +60,21 @@ namespace Neural
             }
 
             {
-                var net = new NeuralNet(new int[] { imageWidth * imageHeight, 600, 400, 200, 100, 10 });
+                var imageIndex = 0;
+
+                var layerSetup = new int[] { imageWidth * imageHeight, 600, 400, 200, 100, 10 };
+                var net = new NeuralNet(layerSetup);
                 var netInput = new float[imageWidth * imageHeight];
                 var netResult = -1;
 
                 void RunNetworkOnImage()
                 {
+                    for (var i = 0; i < netInput.Length; i++) netInput[i] = images[imageIndex][i] / (float)byte.MaxValue;
+
                     var output = net.Run(netInput);
                     Debug.Assert(output.Length == 10);
 
+                    // Get the digit the network has seen
                     var max = 0f;
                     for (var i = 0; i < output.Length; i++)
                     {
@@ -83,7 +90,6 @@ namespace Neural
                 var windowHeight = 720;
                 var imageScale = 8;
 
-                var imageIndex = 0;
                 var labelText = "";
                 var imageText = "";
 
@@ -132,7 +138,6 @@ namespace Neural
 
                 OnImageChanged();
 
-
                 var running = true;
 
                 while (running)
@@ -167,8 +172,35 @@ namespace Neural
                     SDL.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
                     SDL.SDL_RenderClear(renderer);
 
+                    // Draw image
                     SDL.SDL_RenderCopy(renderer, imageTexture, ref imageSourceRect, ref imageDestRect);
 
+                    // Draw network
+                    {
+                        var start = new Point(10, 10);
+                        var size = 4;
+                        var spacing = 2;
+                        var columnOffset = 0;
+                        var maxPerColumn = 100;
+
+                        for (var i = 0; i < net.Layers.Length; i++)
+                        {
+                            var layer = net.Layers[i];
+
+                            for (var j = 0; j < layer.Values.Length; j++)
+                            {
+                                if (j % maxPerColumn == 0) columnOffset++;
+
+                                var value = Math.Clamp(layer.Values[j], 0f, 1f);
+
+                                SDL.SDL_SetRenderDrawColor(renderer, (byte)(0xff * (1f - value)), (byte)(0xff * value), 0x00, 0xff);
+                                var rect = new SDL.SDL_Rect { x = start.X + (i + columnOffset) * (size + spacing), y = start.Y + (j % maxPerColumn) * (size + spacing), w = size, h = size };
+                                SDL.SDL_RenderFillRect(renderer, ref rect);
+                            }
+                        }
+                    }
+
+                    // Draw info
                     fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(labelText) / 2, imageDestRect.y + imageDestRect.h + 8, labelText);
                     fontStyle.DrawText(windowWidth - fontStyle.MeasureText(imageText) - 8, windowHeight - fontStyle.Size - 8, imageText);
 
