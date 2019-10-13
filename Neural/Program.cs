@@ -6,7 +6,6 @@ using SDL2;
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 
 namespace Neural
 {
@@ -60,18 +59,19 @@ namespace Neural
             }
 
             {
-                var imageIndex = 0;
+                var displayedImageIndex = 0;
 
                 var layerSetup = new int[] { imageWidth * imageHeight, 600, 400, 200, 100, 10 };
                 var net = new NeuralNet(layerSetup);
-                var netInput = new float[imageWidth * imageHeight];
+                var netInputs = new float[imageWidth * imageHeight];
+                var netLearningRate = 0.1f;
                 var netResult = -1;
 
-                void RunNetworkOnImage()
+                void RunNetwork(int imageIndex)
                 {
-                    for (var i = 0; i < netInput.Length; i++) netInput[i] = images[imageIndex][i] / (float)byte.MaxValue;
+                    for (var i = 0; i < netInputs.Length; i++) netInputs[i] = images[imageIndex][i] / (float)byte.MaxValue;
 
-                    var output = net.Run(netInput);
+                    var output = net.Compute(netInputs);
                     Debug.Assert(output.Length == 10);
 
                     // Get the digit the network has seen
@@ -84,6 +84,10 @@ namespace Neural
                             netResult = i;
                         }
                     }
+
+                    var expectedOutput = new float[10];
+                    expectedOutput[labels[imageIndex]] = 1f;
+                    net.BackpropagateError(expectedOutput);
                 }
 
                 var windowWidth = 1280;
@@ -92,6 +96,7 @@ namespace Neural
 
                 var labelText = "";
                 var imageText = "";
+                var autoText = "";
 
                 SDL.SDL_Init(SDL.SDL_INIT_VIDEO);
                 SDL.SDL_CreateWindowAndRenderer(windowWidth, windowHeight, 0, out var window, out var renderer);
@@ -104,7 +109,7 @@ namespace Neural
                 var imageSourceRect = new SDL.SDL_Rect { x = 0, y = 0, w = imageWidth, h = imageHeight };
                 var imageDestRect = new SDL.SDL_Rect { x = windowWidth / 2 - (imageWidth / 2 * imageScale), y = windowHeight / 2 - (imageHeight / 2 * imageScale), w = imageWidth * imageScale, h = imageHeight * imageScale };
 
-                void LoadImageForRender()
+                void LoadImageForRender(int imageIndex)
                 {
                     if (imageTexture != IntPtr.Zero) SDL.SDL_DestroyTexture(imageTexture);
 
@@ -130,15 +135,16 @@ namespace Neural
                     imageText = $"({imageIndex} / {images.Length})";
                 }
 
-                void OnImageChanged()
+                void RunNetworkAndRenderImage(int imageIndex)
                 {
-                    RunNetworkOnImage();
-                    LoadImageForRender();
+                    RunNetwork(imageIndex);
+                    LoadImageForRender(imageIndex);
                 }
 
-                OnImageChanged();
+                RunNetworkAndRenderImage(displayedImageIndex);
 
                 var running = true;
+                var autoModeImageIndex = -1;
 
                 while (running)
                 {
@@ -161,8 +167,26 @@ namespace Neural
                                 break;
 
                             case SDL.SDL_EventType.SDL_KEYDOWN:
-                                if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_RIGHT) { if (imageIndex < images.Length - 1) { imageIndex++; OnImageChanged(); } }
-                                else if (@event.key.keysym.sym == SDL.SDL_Keycode.SDLK_LEFT) { if (imageIndex > 0) { imageIndex--; OnImageChanged(); } }
+                                switch (@event.key.keysym.sym)
+                                {
+                                    case SDL.SDL_Keycode.SDLK_RIGHT:
+                                        if (displayedImageIndex < images.Length - 1) { displayedImageIndex++; RunNetworkAndRenderImage(displayedImageIndex); }
+                                        break;
+
+                                    case SDL.SDL_Keycode.SDLK_LEFT:
+                                        if (displayedImageIndex > 0) { displayedImageIndex--; RunNetworkAndRenderImage(displayedImageIndex); }
+                                        break;
+
+                                    case SDL.SDL_Keycode.SDLK_t:
+                                        net.Train(netLearningRate, netInputs);
+                                        RunNetworkAndRenderImage(displayedImageIndex);
+                                        break;
+
+                                    case SDL.SDL_Keycode.SDLK_p:
+                                        autoModeImageIndex = autoModeImageIndex > 0 ? -1 : 0;
+                                        break;
+                                }
+
                                 break;
                         }
                     }
@@ -187,11 +211,11 @@ namespace Neural
                         {
                             var layer = net.Layers[i];
 
-                            for (var j = 0; j < layer.Values.Length; j++)
+                            for (var j = 0; j < layer.Outputs.Length; j++)
                             {
                                 if (j % maxPerColumn == 0) columnOffset++;
 
-                                var value = Math.Clamp(layer.Values[j], 0f, 1f);
+                                var value = Math.Clamp(layer.Outputs[j], 0f, 1f);
 
                                 SDL.SDL_SetRenderDrawColor(renderer, (byte)(0xff * (1f - value)), (byte)(0xff * value), 0x00, 0xff);
                                 var rect = new SDL.SDL_Rect { x = start.X + (i + columnOffset) * (size + spacing), y = start.Y + (j % maxPerColumn) * (size + spacing), w = size, h = size };
@@ -203,9 +227,30 @@ namespace Neural
                     // Draw info
                     fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(labelText) / 2, imageDestRect.y + imageDestRect.h + 8, labelText);
                     fontStyle.DrawText(windowWidth - fontStyle.MeasureText(imageText) - 8, windowHeight - fontStyle.Size - 8, imageText);
+                    fontStyle.DrawText(windowWidth - fontStyle.MeasureText(autoText) - 8, 8, autoText);
 
                     SDL.SDL_RenderPresent(renderer);
-                    Thread.Sleep(1);
+                    // Thread.Sleep(1);
+
+                    if (autoModeImageIndex != -1)
+                    {
+                        for (var i = 0; i < 10; i++)
+                        {
+                            RunNetwork(autoModeImageIndex);
+                            net.Train(netLearningRate, netInputs);
+                            autoModeImageIndex++;
+
+                            autoText = $"Trained on {autoModeImageIndex} images.";
+
+                            if (autoModeImageIndex == images.Length)
+                            {
+                                autoModeImageIndex = -1;
+                                break;
+                            }
+                        }
+
+                        RunNetworkAndRenderImage(displayedImageIndex);
+                    }
                 }
             }
         }
