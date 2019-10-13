@@ -1,5 +1,6 @@
 ﻿// using ComputeSharp;
 
+using Neural.UI;
 using SDL2;
 using System;
 using System.IO;
@@ -21,9 +22,10 @@ namespace Neural
 
             int imageWidth, imageHeight;
             byte[][] images;
+            byte[] labels;
 
             {
-                var bytes = File.ReadAllBytes(Path.Combine(dataPath, "train-images.idx3-ubyte"));
+                var bytes = File.ReadAllBytes(Path.Combine(dataPath, "MNIST", "train-images.idx3-ubyte"));
                 var reader = new PacketReader();
                 reader.Open(bytes);
 
@@ -37,19 +39,31 @@ namespace Neural
                 imageWidth = reader.ReadInt();
 
                 images = new byte[imageCount][];
-
-                for (var i = 0; i < imageCount; i++)
-                {
-                    images[i] = reader.ReadBytes(imageHeight * imageWidth).ToArray();
-                }
+                for (var i = 0; i < imageCount; i++) images[i] = reader.ReadBytes(imageHeight * imageWidth).ToArray();
             }
 
             {
-                var imageIndex = 0;
+                var bytes = File.ReadAllBytes(Path.Combine(dataPath, "MNIST", "train-labels.idx1-ubyte"));
+                var reader = new PacketReader();
+                reader.Open(bytes);
 
+                var magic = reader.ReadInt();
+                if (magic != 0x00000801) throw new Exception("Wrong magic number");
+
+                var itemCount = reader.ReadInt();
+                Console.WriteLine($"Found {itemCount} labels.");
+
+                labels = new byte[itemCount];
+                for (var i = 0; i < itemCount; i++) labels[i] = reader.ReadByte();
+            }
+
+            {
                 var windowWidth = 1280;
                 var windowHeight = 720;
                 var imageScale = 8;
+
+                var imageIndex = 0;
+                var imageText = "";
 
                 var imageTexture = IntPtr.Zero;
                 var imageSourceRect = new SDL.SDL_Rect { x = 0, y = 0, w = imageWidth, h = imageHeight };
@@ -67,8 +81,8 @@ namespace Neural
 
                     for (var i = 0; i < imageWidth * imageHeight; i++)
                     {
-                        pixels[i * 4 + 0] = 0xff;
-                        pixels[i * 4 + 1] = pixels[i * 4 + 2] = pixels[i * 4 + 3] = images[imageIndex][i];
+                        pixels[i * 4 + 0] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = images[imageIndex][i];
+                        pixels[i * 4 + 3] = 0xff;
                     }
 
                     unsafe
@@ -80,9 +94,14 @@ namespace Neural
                             SDL.SDL_FreeSurface(surface);
                         }
                     }
+
+                    imageText = $"Image #{imageIndex}. Label: {labels[imageIndex]}";
                 }
 
                 LoadImage();
+
+                var font = Font.LoadFromChevyRayFolder(renderer, Path.Combine(dataPath, "Fonts", "ChevyRay - Softsquare Mono"));
+                var fontStyle = new FontStyle(font) { Scale = 2, LetterSpacing = 1 };
 
                 var running = true;
 
@@ -119,6 +138,8 @@ namespace Neural
                     SDL.SDL_RenderClear(renderer);
 
                     SDL.SDL_RenderCopy(renderer, imageTexture, ref imageSourceRect, ref imageDestRect);
+
+                    fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(imageText) / 2, imageDestRect.y + imageDestRect.h + 8, imageText);
 
                     SDL.SDL_RenderPresent(renderer);
                     Thread.Sleep(1);

@@ -10,10 +10,24 @@
     <None Include="..\ThirdParty\SDL\SDL2.dll" Link="SDL2.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\ThirdParty\SDL_image\libpng16-16.dll" Link="libpng16-16.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ThirdParty\SDL_image\SDL2_image.dll" Link="SDL2_image.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ThirdParty\SDL_image\zlib1.dll" Link="zlib1.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ThirdParty\ComputeSharp\src\ComputeSharp\ComputeSharp.csproj" />
     <ProjectReference Include="..\ThirdParty\SDL2-CS\SDL2-CS.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Json" Version="4.6.0" />
   </ItemGroup>
 
 </Project>
