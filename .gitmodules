@@ -1,0 +1,6 @@
+[submodule "ThirdParty/ComputeSharp"]
+	path = ThirdParty/ComputeSharp
+	url = https://github.com/Sergio0694/ComputeSharp.git
+[submodule "ThirdParty/SDL2-CS"]
+	path = ThirdParty/SDL2-CS
+	url = https://github.com/flibitijibibo/SDL2-CS.git
