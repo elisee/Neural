@@ -47,7 +47,7 @@ namespace Neural
             {
                 for (var i = 0; i < layer.Weights.Length; i++) layer.Weights[i] = (float)StandardNormalRandom();
 
-                // Apparently a bias of zero is a good idea
+                // Biases should be left at 0
                 // for (var i = 0; i < layer.Biases.Length; i++) layer.Biases[i] = (float)StandardNormalRandom();
             }
         }

@@ -11,8 +11,11 @@ namespace Neural
 {
     class Program
     {
+        enum AutoMode { None, Train, Check }
+
         static void Main(string[] args)
         {
+            // TODO: Use ComputeSharp to run code on GPU
             /*
             using ReadWriteBuffer<float> buffer = Gpu.Default.AllocateReadWriteBuffer<float>(1000);
             Gpu.Default.For(1000, id => buffer[id.X] = id.X);
@@ -67,6 +70,12 @@ namespace Neural
                 var netLearningRate = 0.1f;
                 var netResult = -1;
 
+                void ResetNetwork()
+                {
+                    net = new NeuralNet(layerSetup);
+                    RunNetworkAndRenderImage(displayedImageIndex);
+                }
+
                 void RunNetwork(int imageIndex)
                 {
                     for (var i = 0; i < netInputs.Length; i++) netInputs[i] = images[imageIndex][i] / (float)byte.MaxValue;
@@ -96,7 +105,7 @@ namespace Neural
 
                 var labelText = "";
                 var imageText = "";
-                var autoText = "";
+                var statusText = "";
 
                 SDL.SDL_Init(SDL.SDL_INIT_VIDEO);
                 SDL.SDL_CreateWindowAndRenderer(windowWidth, windowHeight, 0, out var window, out var renderer);
@@ -104,6 +113,7 @@ namespace Neural
 
                 var font = Font.LoadFromChevyRayFolder(renderer, Path.Combine(dataPath, "Fonts", "ChevyRay - Softsquare Mono"));
                 var fontStyle = new FontStyle(font) { Scale = 2, LetterSpacing = 1 };
+                var smallFontStyle = new FontStyle(font) { Scale = 1, LetterSpacing = 1 };
 
                 var imageTexture = IntPtr.Zero;
                 var imageSourceRect = new SDL.SDL_Rect { x = 0, y = 0, w = imageWidth, h = imageHeight };
@@ -132,7 +142,7 @@ namespace Neural
                     }
 
                     labelText = $"Label: {labels[imageIndex]}, Network output: {netResult}";
-                    imageText = $"({imageIndex} / {images.Length})";
+                    imageText = $"({imageIndex}/{images.Length})";
                 }
 
                 void RunNetworkAndRenderImage(int imageIndex)
@@ -144,7 +154,10 @@ namespace Neural
                 RunNetworkAndRenderImage(displayedImageIndex);
 
                 var running = true;
-                var autoModeImageIndex = -1;
+
+                AutoMode autoMode = AutoMode.None;
+                var autoImageIndex = 0;
+                var correctlyPredicted = 0;
 
                 while (running)
                 {
@@ -177,13 +190,42 @@ namespace Neural
                                         if (displayedImageIndex > 0) { displayedImageIndex--; RunNetworkAndRenderImage(displayedImageIndex); }
                                         break;
 
-                                    case SDL.SDL_Keycode.SDLK_t:
-                                        net.Train(netLearningRate, netInputs);
-                                        RunNetworkAndRenderImage(displayedImageIndex);
+                                    case SDL.SDL_Keycode.SDLK_p:
+                                        if (autoMode == AutoMode.Train)
+                                        {
+                                            autoMode = AutoMode.None;
+                                        }
+                                        else
+                                        {
+                                            autoMode = AutoMode.Train;
+                                            autoImageIndex = 0;
+                                        }
                                         break;
 
-                                    case SDL.SDL_Keycode.SDLK_p:
-                                        autoModeImageIndex = autoModeImageIndex > 0 ? -1 : 0;
+                                    /* case SDL.SDL_Keycode.SDLK_t:
+                                        net.Train(netLearningRate, netInputs);
+                                        RunNetworkAndRenderImage(displayedImageIndex);
+                                        break; */
+
+                                    case SDL.SDL_Keycode.SDLK_c:
+                                        if (autoMode == AutoMode.Check)
+                                        {
+                                            autoMode = AutoMode.None;
+                                        }
+                                        else
+                                        {
+                                            autoMode = AutoMode.Check;
+                                            autoImageIndex = 0;
+                                            correctlyPredicted = 0;
+                                        }
+                                        break;
+
+                                    case SDL.SDL_Keycode.SDLK_r:
+                                        if (autoMode == AutoMode.None)
+                                        {
+                                            ResetNetwork();
+                                            statusText = "";
+                                        }
                                         break;
                                 }
 
@@ -204,8 +246,8 @@ namespace Neural
                         var start = new Point(10, 10);
                         var size = 4;
                         var spacing = 2;
-                        var columnOffset = 0;
-                        var maxPerColumn = 100;
+                        var columnOffset = -1;
+                        var maxPerColumn = 50;
 
                         for (var i = 0; i < net.Layers.Length; i++)
                         {
@@ -225,31 +267,55 @@ namespace Neural
                     }
 
                     // Draw info
+                    fontStyle.DrawText(8, windowHeight - fontStyle.Size - 8, "Left/Right to navigate, P to train, C to check accuracy, R to reset network");
                     fontStyle.DrawText(windowWidth / 2 - fontStyle.MeasureText(labelText) / 2, imageDestRect.y + imageDestRect.h + 8, labelText);
                     fontStyle.DrawText(windowWidth - fontStyle.MeasureText(imageText) - 8, windowHeight - fontStyle.Size - 8, imageText);
-                    fontStyle.DrawText(windowWidth - fontStyle.MeasureText(autoText) - 8, 8, autoText);
+                    fontStyle.DrawText(windowWidth - fontStyle.MeasureText(statusText) - 8, 8, statusText);
+
+                    smallFontStyle.DrawText(8, windowHeight - fontStyle.Size * 4 - 12, "Written by Elisee Maurer (@elisee)");
+                    smallFontStyle.DrawText(8, windowHeight - fontStyle.Size * 3 - 12, "MNIST database: yann.lecun.com/exdb/mnist/");
+                    smallFontStyle.DrawText(8, windowHeight - fontStyle.Size * 2 - 12, "Font by Chevy Ray - pixel-fonts.com");
 
                     SDL.SDL_RenderPresent(renderer);
                     // Thread.Sleep(1);
 
-                    if (autoModeImageIndex != -1)
+                    switch (autoMode)
                     {
-                        for (var i = 0; i < 10; i++)
-                        {
-                            RunNetwork(autoModeImageIndex);
-                            net.Train(netLearningRate, netInputs);
-                            autoModeImageIndex++;
-
-                            autoText = $"Trained on {autoModeImageIndex} images.";
-
-                            if (autoModeImageIndex == images.Length)
+                        case AutoMode.Train:
+                            for (var i = 0; i < 10; i++)
                             {
-                                autoModeImageIndex = -1;
-                                break;
-                            }
-                        }
+                                RunNetwork(autoImageIndex);
+                                net.Train(netLearningRate, netInputs);
+                                autoImageIndex++;
 
-                        RunNetworkAndRenderImage(displayedImageIndex);
+                                if (autoImageIndex == images.Length)
+                                {
+                                    autoMode = AutoMode.None;
+                                    break;
+                                }
+                            }
+
+                            statusText = $"Trained on {autoImageIndex} images.";
+                            RunNetworkAndRenderImage(displayedImageIndex);
+                            break;
+
+                        case AutoMode.Check:
+                            for (var i = 0; i < 10; i++)
+                            {
+                                RunNetwork(autoImageIndex);
+                                if (labels[autoImageIndex] == netResult) correctlyPredicted++;
+
+                                autoImageIndex++;
+                                if (autoImageIndex == images.Length)
+                                {
+                                    autoMode = AutoMode.None;
+                                    break;
+                                }
+                            }
+
+                            var percent = Math.Round(100f * correctlyPredicted / autoImageIndex, 2, MidpointRounding.AwayFromZero);
+                            statusText = $"Correctly predicted {percent:0.00}% ({correctlyPredicted}/{autoImageIndex})";
+                            break;
                     }
                 }
             }

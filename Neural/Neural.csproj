@@ -26,7 +26,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NeuralBasics\NeuralBasics.csproj" />
-    <ProjectReference Include="..\ThirdParty\ComputeSharp\src\ComputeSharp\ComputeSharp.csproj" />
     <ProjectReference Include="..\ThirdParty\SDL2-CS\SDL2-CS.Core.csproj" />
   </ItemGroup>
 
