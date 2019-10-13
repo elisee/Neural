@@ -1,5 +1,5 @@
 ﻿using Neural.Graphics;
-using Neural.Math;
+using NeuralBasics.Math;
 using SDL2;
 using System;
 using System.IO;

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace Neural.Math
+namespace NeuralBasics.Math
 {
     [DebuggerDisplay("{DebugDisplay,nq}")]
     public struct Point : IEquatable<Point>

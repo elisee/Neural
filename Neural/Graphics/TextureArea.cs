@@ -1,4 +1,4 @@
-﻿using Neural.Math;
+﻿using NeuralBasics.Math;
 using System;
 
 namespace Neural.Graphics
